@@ -1,6 +1,8 @@
 import configparser
 import inspect
 
+import sys
+
 config = None
 
 class MyError():
@@ -10,16 +12,25 @@ class MyError():
     self.config.read('ErrorMessages.properties')
     self.errorType = et
 
-  def newError(self, key, **data):
+  def newError(self, flag, key, line=None, column=None, **data):
     message = ''
     if(key):
-      message = self.config.get(self.errorType, key)
+      if(flag):
+        message = key
+      
+      else:
+        error = self.config.get(self.errorType, key)
+        if(line and column):
+          message = f"Error[{line}][{column}]:" + error
+        else:
+          message = error
+          
     if(data):
-      for key, value in data.items():
-        message = message + ", " f"{key}: {value}"
+      if(not flag):
+        for key, value in data.items():
+          message = f"Error[{line}][{column}]:" + message + ", " f"{key}: {value}"
 
-    return message
-    #print(message)
+    return(message)
     #frame = inspect.stack()[1][0]
 
     #print(inspect.getframeinfo(frame).__getitem__(0))

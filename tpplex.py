@@ -15,6 +15,8 @@ logging.basicConfig(
 log = logging.getLogger()
 
 le = MyError('LexerErrors')
+checkKey = False
+checkTpp = False
 
 tokens = [
     "ID",  # identificador
@@ -168,31 +170,47 @@ def define_column(input, lexpos):
 
 def t_error(token):
 
-    # file = token.lexer.filename
+    #file = token.lexer.filename
     line = token.lineno
-    # column = define_column(token.lexer.backup_data, token.lexpos)
-    message = le.newError('ERR-LEX-INV-CHAR', valor=token.value[0])
-    # print(f"[{file}]:[{line},{column}]: {message}.")
-    print(message)
+    column = define_column(token.lexer.lexdata, token.lexpos)
+    message = le.newError(checkKey, 'ERR-LEX-INV-CHAR', line, column, valor=token.value[0])
+    #print(f"[{line}]: {message}.")
+
+    #print(token.lexer)
 
     token.lexer.skip(1)
+    print(message)
 
     # token.lexer.has_error = True
 
 
 def main():
 
+    global checkKey
+    global checkTpp
+
     if(len(sys.argv) < 2):
-        raise TypeError(le.newError('ERR-LEX-USE'))
+        raise TypeError(le.newError(checkKey, 'ERR-LEX-USE'))
 
-    aux = argv[1].split('.')
-    if aux[-1] != 'tpp':
-      raise IOError(le.newError('ERR-LEX-NOT-TPP'))
-    elif not os.path.exists(argv[1]):
-        raise IOError(le.newError('ERR-LEX-FILE-NOT-EXISTS'))
+    posArgv = 0
+
+    for idx,arg in enumerate(sys.argv):
+        aux = arg.split('.')
+        if aux[-1] == 'tpp':
+            checkTpp = True
+            posArgv = idx
+        
+        if arg == "-k":
+            checkKey = True
+    
+    if checkKey and len(sys.argv) < 3:
+        raise TypeError(le.newError(checkKey, 'ERR-LEX-USE'))
+    elif not checkTpp:
+        raise IOError(le.newError(checkKey, 'ERR-LEX-NOT-TPP'))
+    elif not os.path.exists(argv[posArgv]):
+        raise IOError(le.newError(checkKey, 'ERR-LEX-FILE-NOT-EXISTS'))
     else:
-        data = open(argv[1])
-
+        data = open(argv[posArgv])
         source_file = data.read()
         lexer.input(source_file)
 
@@ -232,4 +250,3 @@ if __name__ == "__main__":
         print(e)
     except (ValueError, TypeError):
         print(e)
-
