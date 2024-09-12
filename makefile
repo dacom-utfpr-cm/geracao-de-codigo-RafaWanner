@@ -12,10 +12,11 @@ UNIQUE_AST_PNG = $(DIRTEST)/*.unique.ast.png
 run:
 	@export LD_LIBRARY_PATH=/path/to/libs; \
 	python3 tppgencode.py ./tests/$(DIR).tpp -k; \
+	echo "\nExecuting:\n"; \
 	clang -c tests/io.c -S -emit-llvm -o io.ll; \
 	llvm-link tests/$(DIR).ll io.ll -o $(DIR)-link.ll; \
 	clang $(DIR)-link.ll; \
-	echo "\nRunning a.out:\n"; \
+	echo "\nRunning $(DIR):\n"; \
 	./a.out; \
 	sla=$$?; echo "\nExit code: $$sla\n"; \
 	rm ./a.out; \
@@ -29,10 +30,11 @@ run:
 run_not_delete:
 	@export LD_LIBRARY_PATH=/path/to/libs; \
 	python3 tppgencode.py ./tests/$(DIR).tpp -k; \
+	echo "\nExecuting:\n"; \
 	clang -c tests/io.c -S -emit-llvm -o io.ll; \
 	llvm-link tests/$(DIR).ll io.ll -o $(DIR)-link.ll; \
 	clang $(DIR)-link.ll; \
-	echo "\nRunning a.out:\n"; \
+	echo "\nRunning $(DIR):\n"; \
 	./a.out; \
 	sla=$$?; echo "\nExit code: $$sla\n"
 

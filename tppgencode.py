@@ -46,8 +46,6 @@ leiaF = None
 leiaI = None
 escrevaF = None
 escrevaI = None
-showKey = False 
-haveTPP = False
 arrError = []
 module = None
 builder = None
@@ -60,9 +58,9 @@ funcList = []
 
 
 
-#node, caminho = [0,1,0,0] (caminho que vai percorrer entre os filhos)
-#Retorna o node onde o caminho o levou
-def browseNode(node, caminho):
+# Funcoes Basicas
+
+def browse_node(node, caminho):
     nodeAux = node
     for prox in caminho:
         if prox < 0: 
@@ -71,8 +69,7 @@ def browseNode(node, caminho):
             nodeAux = nodeAux.children[prox]
     return nodeAux
     
-#Ja que na propria arvore tem varios nomes para o mesmo tipo, essa função ve a entrada e diz corretamente o tipo
-def whatType(str):
+def what_type(str):
     inteiro = ["INTEIRO","inteiro","NUM_INTEIRO"]
     flutuante = ["flutuante","NUM_PONTO_FLUTUANTE","FLUTUANTE"]
 
@@ -82,9 +79,8 @@ def whatType(str):
     if(str in flutuante):
         return "FLUTUANTE"
     
-def createTypeVar(str):
-    
-    type = whatType(str)
+def create_type_var(str):
+    type = what_type(str)
 
     if(type == "INTEIRO"):
         return ir.IntType(32)
@@ -94,18 +90,17 @@ def createTypeVar(str):
     
     return None
 
-def createVar(node,scope):
+def create_var(node,scope):
     global varList 
     global builder
     global module
 
-    type = createTypeVar(browseNode(node, [0,0]).name)
-    typel = whatType(browseNode(node, [0,0]).name)
-    nodeAux = browseNode(node, [2])
+    type = create_type_var(browse_node(node, [0,0]).name)
+    typel = what_type(browse_node(node, [0,0]).name)
+    nodeAux = browse_node(node, [2])
     while len(nodeAux.children) > 2:
 
-        name = browseNode(nodeAux,[2,0,0]).name
-        # CASO GLOBAL
+        name = browse_node(nodeAux,[2,0,0]).name
         if(scope == None):
             var = ir.GlobalVariable(module, type, name)
         else:
@@ -114,9 +109,9 @@ def createVar(node,scope):
         var.initializer = ir.Constant(type, 0)
         var.align = 4
         varList.append({"scope": scope, "name": name,"var" : var, "type": typel})
-        nodeAux = browseNode(nodeAux, [0])
+        nodeAux = browse_node(nodeAux, [0])
     
-    name = browseNode(nodeAux,[0,0,0]).name
+    name = browse_node(nodeAux,[0,0,0]).name
 
     if(scope == None):
         var = ir.GlobalVariable(module, type, name)
@@ -131,19 +126,16 @@ def getVarInList(varName, scope):
     global varList
     global func
  
-    #print(func.name)
     for var in varList:
-        #print(type(var["var"]))
         if( varName == var["name"] and scope == var["scope"]):
             return var["var"]
 
     for var in func.args:
-        #print(type(var))
         if (var.name == varName and scope == func.name):
             return var
 
     for var in varList:
-        if( varName == var["name"] and None == var["scope"]):
+        if(varName == var["name"] and None == var["scope"]):
             return var["var"]
         
 def getFuncInList(funcName):
@@ -153,26 +145,21 @@ def getFuncInList(funcName):
         if func["name"] == funcName:
             return func["func"]
 
-def atribuition(node, scope):
+def atribution(node, scope):
     global builder
-    global module
-    #print(module)
     
     NodeAux = None
     
-    var = browseNode(node, [0,0,0])
+    var = browse_node(node, [0,0,0])
     var_name = var.name
-    var_ptr = getVarInList(var_name, scope)  # Espera-se que isso retorne um ponteiro (i32*)
+    var_ptr = getVarInList(var_name, scope)
     
-    NodeAux = browseNode(node, [2])
+    NodeAux = browse_node(node, [2])
     varRes = expressions(NodeAux, scope)
-    #print(var_ptr, ' a')
-    #print(varRes, ' b')
-
 
     builder.store(varRes,var_ptr)
 
-def giveArgsList(node, scope):
+def give_args_list(node, scope):
     argsList = []
     nodeAux = None
     ignore_nodes = set()    
@@ -182,27 +169,21 @@ def giveArgsList(node, scope):
         if any(parent in ignore_nodes for parent in node.ancestors):
             continue
 
-        # Se o nó atual for 'chamada_funcao' adiciona ao conjunto
-        # PARA QUE NÃO COLOQUE ARGUMENTOS DE OUTRAS CHAMADAS
         if node.name in ["chamada_funcao"]:
-            #print(f"Ignorando o nó e seus filhos: {node.name}")
             ignore_nodes.add(node)
             continue
 
         if(node.name == 'lista_argumentos'):
             if(len(node.children) > 1):
-                nodeAux = browseNode(node, [2])
+                nodeAux = browse_node(node, [2])
             else:
-                nodeAux = browseNode(node, [0])
+                nodeAux = browse_node(node, [0])
        
             argsList.insert(0,expressions(nodeAux, scope))
-        
-    
+
     return argsList
 
-def expressionsAux(x_temp, y_temp, operation):
-    # Definir a operação
-    #print(operation)
+def expressions_aux(x_temp, y_temp, operation):
     if operation == '>':
         result = builder.icmp_signed('>', x_temp, y_temp, name='maior')
     elif operation == '<':
@@ -243,12 +224,12 @@ def expressionsAux(x_temp, y_temp, operation):
     return result
 
 def expressions(nodeE, scope):
+    global builder
+
     inteiro = ["INTEIRO","inteiro","NUM_INTEIRO"]
     flutuante = ["flutuante","NUM_PONTO_FLUTUANTE", "FLUTUANTE"]
     sinais_aritmeticos = ["+", "-", "*", "/", "%"]
     sinais_logicos = [">", "<", ">=", "<=", "=", "<>", "&&", "||", "!"]
-
-    global builder
 
     x_temp = None
     y_temp = None
@@ -260,39 +241,29 @@ def expressions(nodeE, scope):
     ignore_nodes = set()
 
     for node in (PreOrderIter(nodeE)):
-
-        # PARA NAO LER FATORES DAS CHAMADAS DE FUNÇÃO
         if any(parent in ignore_nodes for parent in node.ancestors):
             continue
 
-        # Se o nó atual for 'chamada_funcao' ou 'lista_argumentos', adiciona ao conjunto
         if node.name in ["chamada_funcao", "lista_argumentos"]:
-            #print(f"Ignorando o nó e seus filhos: {node.name}")
             ignore_nodes.add(node)
             continue
 
-        #print(node.name)
         if node.name == "fator":
-            #nodeAux = browseNode(node, [0,0])
-
-            if(browseNode(node, [0]).name == 'chamada_funcao'):
+            if(browse_node(node, [0]).name == 'chamada_funcao'):
                 
-                nodeAux = browseNode(node, [0,0,0])
+                nodeAux = browse_node(node, [0,0,0])
                 func = getFuncInList(nodeAux.name)
                 
-                nodeAux = browseNode(node, [0,2])
+                nodeAux = browse_node(node, [0,2])
                 if(x_temp == None):
-                    x_temp = builder.call(func, giveArgsList(nodeAux, scope))
+                    x_temp = builder.call(func, give_args_list(nodeAux, scope))
                 else:
-                    y_temp = builder.call(func, giveArgsList(nodeAux, scope))
-                #print(x_temp, y_temp, expression)
+                    y_temp = builder.call(func, give_args_list(nodeAux, scope))
                     
-            elif(browseNode(node, [0,0]).name == "ID"):
-                #CASO SEJA UM ID
-                nodeAux = browseNode(node, [0,0,0])
+            elif(browse_node(node, [0,0]).name == "ID"):
+                nodeAux = browse_node(node, [0,0,0])
                 if(x_temp == None):
                     var = getVarInList(nodeAux.name, scope)
-                    # SE NAO FOR PARAMETRO
                     if isinstance(var, ir.instructions.AllocaInstr) or isinstance(var, ir.values.GlobalVariable):
                         x_temp = builder.load(var, name='x_temp')
                     else:
@@ -300,38 +271,33 @@ def expressions(nodeE, scope):
 
                 else:
                     var = getVarInList(nodeAux.name, scope)
-                    # SE NAO FOR PARAMETRO
                     if isinstance(var, ir.instructions.AllocaInstr) or isinstance(var, ir.values.GlobalVariable):
                         y_temp = builder.load(var, name='y_temp')
                     else:
                         y_temp = var
 
-                    #print(x_temp, y_temp, expression)
-                    x_temp = expressionsAux(x_temp, y_temp, expression)
+                    x_temp = expressions_aux(x_temp, y_temp, expression)
                     y_temp = None
                     expression = None
-            elif(browseNode(node, [0,0]).name in flutuante or browseNode(node, [0,0]).name in inteiro):
-                #CASO SEJA UMA CONSTANTE
-                nodeAux = browseNode(node, [0,0])
-                varType = createTypeVar(nodeAux.name)
-                nodeAux = browseNode(nodeAux, [0])
+
+            elif(browse_node(node, [0,0]).name in flutuante or browse_node(node, [0,0]).name in inteiro):
+                nodeAux = browse_node(node, [0,0])
+                varType = create_type_var(nodeAux.name)
+                nodeAux = browse_node(nodeAux, [0])
                 if(x_temp == None):
                     if (varType == ir.FloatType()):
                         x_temp = ir.Constant(varType,float(nodeAux.name))
                     else:
                         x_temp = ir.Constant(varType,nodeAux.name)
                 else:
-                    #print("test")
                     y_temp = ir.Constant(varType,nodeAux.name)
-                    x_temp = expressionsAux(x_temp, y_temp, expression)
+                    x_temp = expressions_aux(x_temp, y_temp, expression)
                     y_temp = None
                     expression = None
             
-
         if(node.name in sinais_aritmeticos or node.name in sinais_logicos): 
             expression = node.name
-            #print(node.name)
-            #TODO : TRATAR PARENTESES COM RECURSIVIDADE !!!!!!
+
     return(x_temp)
 
 def condicao(node, scope, func):
@@ -342,7 +308,7 @@ def condicao(node, scope, func):
     
     haveElse = len(node.children) > 5
     
-    nodeAux = browseNode(node, [1])
+    nodeAux = browse_node(node, [1])
     expressionRes = expressions(nodeAux, scope)
     
     if(haveElse):
@@ -353,63 +319,54 @@ def condicao(node, scope, func):
         builder.cbranch(expressionRes,iftrue[-1], iffalse[-1])
     else : 
         iftrue.append(func.append_basic_block('iftrue_1'))
-        #print('teste')
         ifend.append(func.append_basic_block('ifend_1'))
-        
+
         builder.cbranch(expressionRes,iftrue[-1], ifend[-1])
 
     builder.position_at_end(iftrue.pop())
 
-    #SE NÃO TEM SENÃO, iffalse_1 leva pra saida!
-
-def getTypeInList(varName, scope, list):
-
+def get_type_in_list(varName, scope, list):
     for var in list:
-        if( varName == var["name"] and scope == var["scope"]):
+        if(varName == var["name"] and scope == var["scope"]):
             return var["type"]
 
     for var in list:
-        if( varName == var["name"] and None == var["scope"]):
+        if(varName == var["name"] and None == var["scope"]):
             return var["type"]
 
-#ESSA LISTA É PARA VERIFICAR NOME DE VARIAVEL E TIPO
-#PARA VERIFICAR SE PRECISA DE FUNÇÃO DE ESCREVER E LER
-def ADDAnotherVarInList(node, scope, list):
-
-    varType = whatType(browseNode(node, [0,0]).name)
-    nodeAux = browseNode(node, [2])
+def add_another_var_in_list(node, scope, list):
+    varType = what_type(browse_node(node, [0,0]).name)
+    nodeAux = browse_node(node, [2])
     while len(nodeAux.children) > 2:
-        name = browseNode(nodeAux,[2,0,0]).name
-        #print(name)
-        
+        name = browse_node(nodeAux,[2,0,0]).name
         list.append({"name": name, "scope": scope, "type": varType})
-        nodeAux = browseNode(nodeAux, [0])
+        nodeAux = browse_node(nodeAux, [0])
     
-    name = browseNode(nodeAux,[0,0,0]).name
+    name = browse_node(nodeAux,[0,0,0]).name
 
     list.append({"name": name, "scope": scope, "type": varType})
 
-def findFirstTypeVar(expressionNode,list,scope):
+def find_first_type_var(expressionNode,list,scope):
     nodeAux = None
     for node in (PreOrderIter(expressionNode)):
         if(node.name == 'fator'):
-            nodeAux = browseNode(node, [0,0])
-            if(nodeAux.name == 'ID'):
-                #print(nodeAux.name)
-                nodeAux = browseNode(nodeAux, [0])
-                return getTypeInList(nodeAux.name,scope,list)
-            else:
-                return whatType(nodeAux.name)    
+            nodeAux = browse_node(node, [0,0])
 
-def verifyReadPrint(tree):
-    inteiro = ["INTEIRO","inteiro","NUM_INTEIRO"]
-    flutuante = ["flutuante","NUM_PONTO_FLUTUANTE", "FLUTUANTE"]
+            if(nodeAux.name == 'ID'):
+                nodeAux = browse_node(nodeAux, [0])
+                return get_type_in_list(nodeAux.name,scope,list)
+            else:
+                return what_type(nodeAux.name)    
+
+def verify_read_print(tree):
     global module
-    global builder
     global leiaF
     global leiaI
     global escrevaF
     global escrevaI
+
+    inteiro = ["INTEIRO","inteiro","NUM_INTEIRO"]
+    flutuante = ["flutuante","NUM_PONTO_FLUTUANTE", "FLUTUANTE"]
     
     haveReadInt = False
     haveReadFloat = False
@@ -424,17 +381,15 @@ def verifyReadPrint(tree):
 
     for node in (PreOrderIter(tree)):
         
-        #print(node.name)
         if(node.name == "declaracao_funcao"):
-            scope = browseNode(node, [1,0,0]).name
+            scope = browse_node(node, [1,0,0]).name
 
         if(node.name == "declaracao_variaveis"):
-            ADDAnotherVarInList(node,scope,list)
+            add_another_var_in_list(node,scope,list)
 
         if(node.name == "leia" and len(node.children) > 1):
-            #por enquanto ta com nome da variavel
-            nameVar = browseNode(node,[2,0,0]).name
-            type = getTypeInList(nameVar, scope, list)
+            nameVar = browse_node(node,[2,0,0]).name
+            type = get_type_in_list(nameVar, scope, list)
 
             if(type in flutuante and not haveReadFloat):
                 _leiaF = ir.FunctionType(ir.FloatType(), [])
@@ -448,8 +403,8 @@ def verifyReadPrint(tree):
             
         if(node.name == "escreva" and len(node.children) > 1):
             
-            nodeAux = browseNode(node, [2])
-            type = findFirstTypeVar(nodeAux,list,scope)
+            nodeAux = browse_node(node, [2])
+            type = find_first_type_var(nodeAux,list,scope)
             if(type in flutuante and not havePrintFloat):
                 _escrevaF = ir.FunctionType(ir.VoidType(), [ir.FloatType()])
                 escrevaF = ir.Function(module, _escrevaF, "escrevaFlutuante")
@@ -460,58 +415,34 @@ def verifyReadPrint(tree):
                 escrevaI = ir.Function(module, _escrevaI, "escrevaInteiro")
                 havePrintInt = True
 
-        
-    #if(havePrint):
-
-def verifyParams(functionDeclarationNode,functionName):
-    global varList
-    global builder
-
-    nodeAux = browseNode(functionDeclarationNode, [1,2])
+def verify_params(functionDeclarationNode):
+    nodeAux = browse_node(functionDeclarationNode, [1,2])
 
     name = None
-    typel = None
     typeList = []
     varNameList = []
-    var = None
     type = None
 
     for node in (PreOrderIter(nodeAux)):
         if(node.name == "parametro"):
-            #typel = whatType(browseNode(node, [0,0]).name)
-
-            name = browseNode(node, [2,0]).name
-
-            type = createTypeVar(browseNode(node, [0,0]).name)
-
+            name = browse_node(node, [2,0]).name
+            type = create_type_var(browse_node(node, [0,0]).name)
             typeList.append(type)
-
             varNameList.append(name)   
-
-            #varList.append({"scope": functionName, "name": name,"var" : var, "type": typel})
-
 
     return(varNameList, typeList)
             
 
-def generateCode(tree, file_name):
+
+# Execucao
+
+def init(file_name):
+    global module
+
     llvm.initialize()
     llvm.initialize_all_targets()
     llvm.initialize_native_target()
     llvm.initialize_native_asmprinter()
-
-    global module
-    global builder
-    global varList
-    global iftrue
-    global iffalse
-    global ifend
-    global leiaF
-    global leiaI
-    global escrevaF
-    global escrevaI
-    global func
-    global funcList
 
     module = ir.Module(file_name + '.bc')
     module.triple = llvm.get_process_triple()
@@ -519,156 +450,230 @@ def generateCode(tree, file_name):
     target_machine = target.create_target_machine()
     module.data_layout = target_machine.target_data
 
-    #builder = None Ja declarado
-    entryBlock = None
-    endBasicBlock = None
-    scope = None
-    #func = None
-    escreva = False
-    loop = None
-    loopVal = []
-    lopeEnd = []
-    #Esses 3 com formato de pilha, para ajudar na lógica
-    #Eles guardam blocos de código os ifs
-    #iftrue = []
-    #iffalse = []
-    #ifend = []
-               
+def execute_order_66(tree, file_name):
+    global module
 
-    verifyReadPrint(tree)
-    varList = []
+    init(file_name)
+
+    aux_vars = {"entryBlock": None,
+               "endBasicBlock": None,
+               "scope": None,
+               "escreva": False,
+               "loop": None,
+               "loopVal": [],
+               "lopeEnd": [],
+               "nodeAux": None,
+               "type": None,
+               "var": None,
+               "functInfo": None,
+               "name": None}
+
+    verify_read_print(tree)
 
     for node in (PreOrderIter(tree)):
-        nodeAux = None
-        type = None
-        var = None
-        functInfo = None
-        name = None
+        aux_vars["nodeAux"] = None
+        aux_vars["type"] = None
+        aux_vars["var"] = None
+        aux_vars["functInfo"] = None
+        aux_vars["name"] = None
 
-        #print(node.name)
-       
         if(node.name == "declaracao_funcao"):
-            
-            name = browseNode(node, [1,0,0]).name
-            #FUNÇÃO PRINCIPAL TEM QUE SE CHAMAR 'main'
-            #POR ISSO IREMOS TROCAR QUANDO NOME É principal OU main
-            if(name == 'principal'):
-                name = 'main'
-            elif(name == 'main'):
-                name = 'principal'
-            
-            scope = name
-            type = browseNode(node, [0,0,0]).name
-            
-            var = createTypeVar(type)
-            
-            varNameList, typeList = verifyParams(node, name)
-
-            functInfo = ir.FunctionType(var, typeList)
-            func = ir.Function(module, functInfo, name=name)
-            funcList.append({"name": name, "func": func})
-            
-            for i in range(len(varNameList)):
-                func.args[i].name = varNameList[i]
-                #print(func.args[i],  " : " , func.args[i].name)
-            #print(functInfo, name, var, type)
-            entryBlock = func.append_basic_block('entry')
-            
-            
-            builder = ir.IRBuilder(entryBlock)
+            aux_vars = declaracao_funcao(node, aux_vars)
 
         if(node.name == "fim"):
-            if(browseNode(node, [-1,-1,-1]).name == "declaracao_funcao"):
-                # Cria um salto para o bloco de saída
-                #builder.branch(endBasicBlock)
-                scope = None
-                #TODO: PARA FAZER RETURN DO JEITO CORRETO
-                # Adiciona o bloco de saida
-                #endBasicBlock = func.append_basic_block('exit')
-                #builder = ir.IRBuilder(endBasicBlock)
-                #builder.position_at_end(endBasicBlock)
-                
+            aux_vars = fim(node, aux_vars)
 
-            if(browseNode(node, [-1,-1]).name == "se"):
-                #print(module)
-                #print(ifend)
-                builder.branch(ifend[-1])
-                builder.position_at_end(ifend.pop())
-
-                
-
-        #Para lidar com a estrutura estranha do retorna
         if(node.name == "retorna" and len(node.children) > 1):
-            nodeAux = browseNode(node, [2])
-            builder.ret(expressions(nodeAux, scope))
+            aux_vars = retorna(node, aux_vars)
         
         if(node.name == "declaracao_variaveis"):
-            createVar(node, scope)
+            aux_vars = declaracao_variaveis(node, aux_vars)
 
         if(node.name == "atribuicao"):
-            atribuition(node, scope)
+            aux_vars = atribuicao(node, aux_vars)
 
         if(node.name == "se" and len(node.children) > 1):
-            
-            condicao(node,scope,func)
+            aux_vars = se(node, aux_vars)
 
         if(node.name == "SENAO"):
-            builder.branch(ifend[-1])
-            builder.position_at_end(iffalse.pop())
-            #print('teste')
+            aux_vars = senao(aux_vars)
 
         if(node.name == "escreva" and len(node.children) > 1):
-            nodeAux = browseNode(node, [2])
-            type = findFirstTypeVar(nodeAux, varList, scope)
-
-            if(type == 'INTEIRO'):
-                builder.call(escrevaI, args=[expressions(nodeAux, scope)]) 
-
-            if(type == 'FLUTUANTE'):
-                builder.call(escrevaF, args=[expressions(nodeAux, scope)])                
+            aux_vars = escreva(node, aux_vars)             
 
         if(node.name == "leia" and len(node.children) > 1):
-            nodeAux = browseNode(node, [2,0,0])
-            name = nodeAux.name
-            type = getTypeInList(name, scope, varList)
-            var = getVarInList(name, scope)
-            if(type == 'INTEIRO'):
-                resultado_leia = builder.call(leiaI, args=[])
-                builder.store(resultado_leia, var)
-
-            if(type == 'FLUTUANTE'):
-                resultado_leia = builder.call(leiaF, args=[])
-                builder.store(resultado_leia, var)
+            aux_vars = leia(node, aux_vars)
         
         if(node.name == 'repita' and len(node.children) > 1):
-            loop = builder.append_basic_block('loop')
-            builder.branch(loop)
-            builder.position_at_end(loop)
+            aux_vars = repita(aux_vars)
 
-        if(node.name == 'ATE' and browseNode(node,[-1]).name == 'repita'):
-            lopp_val = builder.append_basic_block('loop_val')
-            loop_end = builder.append_basic_block('loop_end')
-            # Pula para o laço de validação
-            builder.branch(lopp_val)
-            # Posiciona no inicio do bloco de validação e define o que o loop de validação irá executar
-            builder.position_at_end(lopp_val)
-            nodeAux = browseNode(node, [-1,3])
-            #FAZER EXPRESSÃO DE ATE
-            var = expressions(nodeAux, scope)
-            builder.cbranch(var, loop_end, loop)
-
-            # Posiciona no inicio do bloco do fim do loop (saída do laço) e define o que o será executado após o fim (o resto do programa)  
-            builder.position_at_end(loop_end)
+        if(node.name == 'ATE' and browse_node(node,[-1]).name == 'repita'):
+            aux_vars = ate(node, aux_vars)
         
-
-    #print(file_name)
     arquive = open('./tests/'+file_name+'.ll', 'w')
     arquive.write(str(module))
     arquive.close()
 
 
 
-# Programa Principal.
+# Construtores
+
+def declaracao_funcao(node, aux_vars):
+    global module
+    global builder
+    global varList
+    global func
+    global funcList
+
+    aux_vars["name"] = browse_node(node, [1,0,0]).name
+    if(aux_vars["name"] == 'principal'):
+        aux_vars["name"] = 'main'
+    elif(aux_vars["name"] == 'main'):
+        aux_vars["name"] = 'principal'
+    
+    aux_vars["scope"] = aux_vars["name"]
+    aux_vars["type"] = browse_node(node, [0,0,0]).name
+    
+    aux_vars["var"] = create_type_var(aux_vars["type"])
+    
+    varNameList, typeList = verify_params(node)
+
+    aux_vars["functInfo"] = ir.FunctionType(aux_vars["var"], typeList)
+    func = ir.Function(module, aux_vars["functInfo"], name=aux_vars["name"])
+    funcList.append({"name": aux_vars["name"], "func": func})
+    
+    for i in range(len(varNameList)):
+        func.args[i].name = varNameList[i] + "_param"
+    entryBlock = func.append_basic_block('entry')
+    
+    builder = ir.IRBuilder(entryBlock)
+    
+    builder.position_at_start(entryBlock)
+    for i in range(len(varNameList)):
+        typel = what_type(type)
+        var2 = builder.alloca(aux_vars["var"], name=varNameList[i])
+        var2.initializer = ir.Constant(aux_vars["var"], 0)
+        var2.align = 4
+        varList.append({"scope": aux_vars["scope"], "name": varNameList[i],"var" : var2, "type": typel})
+        
+        var_ptr = getVarInList(varNameList[i], aux_vars["scope"])
+        varRes = getVarInList(varNameList[i] + "_param", aux_vars["scope"])
+        builder.store(varRes,var_ptr)
+
+    return aux_vars
+
+def fim(node, aux_vars):
+    global builder
+    global ifend
+    
+    if(browse_node(node, [-1,-1,-1]).name == "declaracao_funcao"):
+        aux_vars["scope"] = None
+
+    if(browse_node(node, [-1,-1]).name == "se"):
+        builder.branch(ifend[-1])
+        builder.position_at_end(ifend.pop())
+
+    return aux_vars
+
+def retorna(node, aux_vars):
+    global builder
+
+    aux_vars["nodeAux"] = browse_node(node, [2])
+    builder.ret(expressions(aux_vars["nodeAux"], aux_vars["scope"]))
+
+    return aux_vars
+
+def declaracao_variaveis(node, aux_vars):
+    create_var(node, aux_vars["scope"])
+
+    return aux_vars
+
+def atribuicao(node, aux_vars):
+    atribution(node, aux_vars["scope"])
+
+    return aux_vars
+
+def se(node, aux_vars):
+    condicao(node,aux_vars["scope"],func)
+
+    return aux_vars
+
+def senao(aux_vars):
+    global builder
+    global iffalse
+    global ifend
+
+    builder.branch(ifend[-1])
+    builder.position_at_end(iffalse.pop())
+
+    return aux_vars
+
+def escreva(node, aux_vars):
+    global builder
+    global varList
+    global escrevaF
+    global escrevaI
+
+    aux_vars["nodeAux"] = browse_node(node, [2])
+    aux_vars["type"] = find_first_type_var(aux_vars["nodeAux"], varList, aux_vars["scope"])
+
+    if(aux_vars["type"] == 'INTEIRO'):
+        builder.call(escrevaI, args=[expressions(aux_vars["nodeAux"], aux_vars["scope"])]) 
+
+    if(aux_vars["type"] == 'FLUTUANTE'):
+        builder.call(escrevaF, args=[expressions(aux_vars["nodeAux"], aux_vars["scope"])]) 
+
+    return aux_vars
+
+def leia(node, aux_vars):
+    global builder
+    global varList
+    global leiaF
+    global leiaI
+
+    aux_vars["nodeAux"] = browse_node(node, [2,0,0])
+    aux_vars["name"] = aux_vars["nodeAux"].name
+    aux_vars["type"] = get_type_in_list(aux_vars["name"], aux_vars["scope"], varList)
+    aux_vars["var"] = getVarInList(aux_vars["name"], aux_vars["scope"])
+
+    if(aux_vars["type"] == 'INTEIRO'):
+        resultado_leia = builder.call(leiaI, args=[])
+        builder.store(resultado_leia, aux_vars["var"])
+
+    if(aux_vars["type"] == 'FLUTUANTE'):
+        resultado_leia = builder.call(leiaF, args=[])
+        builder.store(resultado_leia, aux_vars["var"])
+
+    return aux_vars
+
+def repita(aux_vars):
+    global builder
+
+    aux_vars["loop"] = builder.append_basic_block('loop')
+    builder.branch(aux_vars["loop"])
+    builder.position_at_end(aux_vars["loop"])
+
+    return aux_vars
+
+def ate(node, aux_vars):
+    global builder
+
+    aux_vars["loop_val"] = builder.append_basic_block('loop_val')
+    aux_vars["loop_end"] = builder.append_basic_block('loop_end')
+    builder.branch(aux_vars["loop_val"])
+    builder.position_at_end(aux_vars["loop_val"])
+    aux_vars["nodeAux"] = browse_node(node, [-1,3])
+    var = expressions(aux_vars["nodeAux"], aux_vars["scope"])
+    builder.cbranch(var, aux_vars["loop_end"], aux_vars["loop"])
+
+    builder.position_at_end(aux_vars["loop_end"])
+
+    return aux_vars
+
+
+
+# Programa Principal
+
 def main():
     global checkKey
     global checkTpp
@@ -702,7 +707,7 @@ def main():
     else:
         root, warning_array = tppsema_main(sys.argv)
 
-        generateCode(root, argv[posArgv].split('.')[1].split('/')[-1])
+        execute_order_66(root, argv[posArgv].split('.')[1].split('/')[-1])
 
         # To visualize the tree:
         #for pre, fill, node in RenderTree(root):

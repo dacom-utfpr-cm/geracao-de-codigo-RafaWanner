@@ -1,7 +1,5 @@
 import sys
 import os
-import subprocess
-import json
 import re
 
 from sys import argv, exit
@@ -43,37 +41,6 @@ root = None
 
 
 
-#    def find_node(node, target_name):
-#        if node.name == target_name:
-#            return node
-#        for child in getattr(node, 'children', []):
-#            result = find_node(child, target_name)
-#            if result:
-#                return result
-#        return None
-#
-#    # Search for the 'principal' function declaration in the tree
-#    principal_node = find_node(root, 'principal')
-#    
-#    if principal_node is None:
-#        errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-MAIN-NOT-DECL'))
-
-#    def find_all_nodes(node, target_name, result=None):
-#        if result is None:
-#            result = []
-#        if node.name == target_name:
-#            result.append(node)
-#        for child in getattr(node, 'children', []):
-#            find_all_nodes(child, target_name, result)
-#        return result
-#
-#    # Usage
-#    principal_nodes = find_all_nodes(root, 'principal')
-#    if not principal_nodes:
-#        errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-MAIN-NOT-DECL'))
-
-
-
 # Funcoes Basicas
 
 def walk_tree(node, path):
@@ -109,6 +76,24 @@ def find_all_paths(node, path):
     a = find_all_nodes(node, path[0])
 
     for i in range(len(a)):
+        temp_result = walk_tree(a[i], temp_path)
+
+        if (temp_result is not None):
+            result.append(temp_result)
+
+    return result
+
+def find_all_paths_excludint_child(node, path, child):
+    temp_path = path[1:]
+    result = []
+    temp_result = None
+
+    a = find_all_nodes(node, path[0])
+
+    for i in range(len(a)):
+        if (find_parent_node(a[i], child)):
+            if (find_parent_node(a[i], child) != node):
+                continue
         temp_result = walk_tree(a[i], temp_path)
 
         if (temp_result is not None):
@@ -351,7 +336,6 @@ def s_declaracao_de_funcao(root):
 
     for function_call in function_calls:
         dec_temp = []
-
         for i in range(len(dec_funcs)):
             if (function_call.name == dec_funcs[i].name):
                 dec_temp.append(dec_funcs[i])
@@ -376,7 +360,7 @@ def s_declaracao_de_funcao(root):
 
             if function_check and function_check.children[0].name == function_call.name:
                 function_is_declared = True
-                s_identificador_de_funcao(function_check.children[0], function_call)
+                s_identificador_de_funcao(root, function_check.children[0], function_call)
                 break
             else:
                 function_node = walk_tree(function_node, ["lista_declaracoes"])
@@ -388,7 +372,7 @@ def s_declaracao_de_funcao(root):
         warningArray.append(error_handler.newError(checkKey, 'WAR-SEM-FUNC-DECL-NOT-USED'))
 
 # checa se a quantidade de parametros reais e formais de uma funcao sao iguais
-def s_identificador_de_funcao(node_formal, node_real):
+def s_identificador_de_funcao(root, node_formal, node_real):
     parameters_path = [
         "lista_parametros",
         "parametro"
@@ -400,8 +384,8 @@ def s_identificador_de_funcao(node_formal, node_real):
     ]
 
     formal_length = find_all_paths(node_formal.parent.parent, parameters_path)
-    real_length = find_all_paths(node_real.parent.parent, argumentos_path)
-
+    real_length = find_all_paths_excludint_child(node_real.parent.parent, argumentos_path, "chamada_funcao")
+    
     if (len(real_length) > len(formal_length)):
         errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-CALL-FUNC-WITH-MANY-ARGS'))
 
@@ -414,7 +398,6 @@ def s_identificador_de_funcao(node_formal, node_real):
 # checa se a funcao foi retornada corretamente
 def s_retorno_de_funcao(root):
     retorno_path = [
-        "cabecalho",
         "corpo",
         "acao",
         "retorna"
@@ -424,25 +407,25 @@ def s_retorno_de_funcao(root):
     retorno_var = None
 
     for i in range(len(dec_func)):
-        retorno = walk_tree(dec_func[i], retorno_path)
+        retornos = find_all_paths_including_parent(dec_func[i], retorno_path, "cabecalho")
         function_type = dec_func[i].children[0].children[0].name
 
-        if (retorno is not None):
-            # checa se o retorno e uma variavel
-            retorno_check = find_all_nodes_children_with_parent(retorno, ["fator", "var", "ID"], "expressao")
-
-            if (retorno_check):
-                for j in range(len(retorno_check)):
-                    retorno_var = retorno_check[j]
-                    comparator_type(root, retorno_var, function_type, error_msg='ERR-SEM-FUNC-RET-TYPE-ERROR', var_dec_check=True)
-
-            else:
-                retorno_check = find_all_nodes_children_with_parent(retorno, ["fator", "numero"], "expressao")
+        if (retornos != []):
+            for retorno in retornos:
+                # checa se o retorno e uma variavel
+                retorno_check = find_all_nodes_children_with_parent(retorno, ["fator", "var", "ID"], "expressao")
                 if (retorno_check):
                     for j in range(len(retorno_check)):
-                        retorno_var = get_string_after_last_underscore(retorno_check[j].name)
-                        if (retorno_var != function_type):
-                            errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-FUNC-RET-TYPE-ERROR'))
+                        retorno_var = retorno_check[j]
+                        comparator_type(root, retorno_var, function_type, error_msg='ERR-SEM-FUNC-RET-TYPE-ERROR', var_dec_check=True)
+
+                else:
+                    retorno_check = find_all_nodes_children_with_parent(retorno, ["fator", "numero"], "expressao")
+                    if (retorno_check):
+                        for j in range(len(retorno_check)):
+                            retorno_var = get_string_after_last_underscore(retorno_check[j].name)
+                            if (retorno_var != function_type):
+                                errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-FUNC-RET-TYPE-ERROR'))
 
         else:
             errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-FUNC-RET-TYPE-ERROR'))
@@ -473,12 +456,20 @@ def s_variavel_nao_declarada(root):
             atribuicoes[i].name
         ]
 
+        formal_path = [
+            "parametro",
+            "id",
+            atribuicoes[i].name
+        ]
+
         variables = find_all_paths_including_parent(pai, variable_path, "declaracao_variaveis")
         if (not variables and pai != root):
             variables = find_all_paths_including_parent(root, variable_path, "declaracao_variaveis")
 
         if (not variables):
-            errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-VAR-NOT-DECL'))
+            variables = find_all_paths_including_parent(pai, formal_path, "lista_parametros")
+            if (not variables):
+                errorArray.append(error_handler.newError(checkKey, 'ERR-SEM-VAR-NOT-DECL'))
 
 # verifica se a variavel foi declarada, utilizada e inicializada
 def s_variavel_declarada_inicializada_utilizada(root):
